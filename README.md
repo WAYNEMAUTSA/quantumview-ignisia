@@ -2,6 +2,42 @@
 
 A real-time dashboard and automation engine for monitoring, reconciling, and healing webhook-driven payment transactions. It detects anomalies (dropped events, state conflicts, gateway outages), runs auto-heal workflows via a BullMQ queue, and provides a visual review queue for manual intervention.
 
+## ✨ Key Features
+
+- **Real-Time Drift Detection**: Monitors transaction lifecycle gaps (dropped, out-of-order, duplicate events)
+- **AI Auto-Healing**: Automatically fetches missing events from payment gateways and repairs transaction state
+- **Chaos Healer Agent**: Real-time webhook processor that detects and fixes gaps, duplicates, and stale events
+- **Anomaly Management**: Automatic detection + manual review queue for complex failures
+- **Audit Trail**: Every AI agent decision is logged with reasoning, confidence scores, and actions taken
+- **Live Dashboard**: Auto-refreshing metrics with drift charts, volume breakdowns, and agent activity
+
+## Architecture Flow
+
+```
+Webhook Received
+    ↓
+Chaos Healer (real-time)
+    ├── Detects gaps/duplicates/out-of-order
+    ├── Synthesizes bridge events if needed
+    └── Logs to healer_audit_log
+    ↓
+State Machine
+    ├── Updates transaction state
+    └── Gap Detector finds missing states
+    ↓
+BullMQ Heal Queue
+    ├── Fetches from payment gateway
+    ├── Replays missing events
+    ├── Auto-resolves anomalies
+    └── Logs to healer_audit_log
+    ↓
+Dashboard Metrics (every 10s)
+    ├── Drift Rate
+    ├── AI Recovery Rate
+    ├── Open Anomalies
+    └── Heal Success Rate
+```
+
 ## Project Structure
 
 ```
@@ -61,6 +97,70 @@ A real-time dashboard and automation engine for monitoring, reconciling, and hea
 | `VITE_API_URL` | URL of the backend API | `http://localhost:3000` |
 | `VITE_SUPABASE_URL` | Supabase project URL (realtime subscriptions) | *(optional)* |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key (realtime subscriptions) | *(optional)* |
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm run install:all
+```
+
+### 2. Setup Environment Variables
+
+Create `.env` in the `backend/` folder:
+
+```bash
+cd backend
+cp ../.env.example .env
+```
+
+Edit `.env`:
+```env
+PORT=3000
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+SELF_URL=http://localhost:3000
+```
+
+### 3. Setup Database (CRITICAL)
+
+Go to **Supabase SQL Editor** and run these files in order:
+
+```bash
+# Run in Supabase SQL Editor (in order):
+backend/src/db/schema.sql                            # Base schema
+backend/src/db/migration_add_resolution_notes.sql    # Anomaly tracking
+backend/src/db/migration_fix_healer_audit_log.sql    # ⚠️ FIXES audit log schema
+backend/src/db/migration_add_drift_snapshots.sql     # Drift history
+```
+
+Then edit `migration_add_ai_metadata.sql` and **remove** the `CREATE TABLE healer_audit_log` section (it's already created by the previous migration). Run only the `ALTER TABLE webhook_events` part.
+
+### 4. Start the App
+
+```bash
+npm run dev
+```
+
+- **Backend**: http://localhost:3000
+- **Frontend**: http://localhost:8080
+
+### 5. Verify It Works
+
+```bash
+# Test with dropped events scenario
+curl -X POST http://localhost:3000/mock/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"scenario":"dropped"}'
+```
+
+Check backend console for:
+```
+[HealerAudit] Successfully recorded: outcome=healed, txn=pay_DROP001
+```
+
+Refresh dashboard → Metrics should update within 10 seconds.
 
 ## Running Locally
 
@@ -279,12 +379,59 @@ The Supabase schema is in `backend/src/db/schema.sql`. Run it in your Supabase S
 
 Run these migrations in order after the base schema:
 
-1. **`migration_add_resolution_notes.sql`** - Adds resolution tracking to anomalies
-2. **`migration_add_healer_audit_log.sql`** - Creates the initial healer audit log table (will be replaced by next migration)
-3. **`migration_fix_healer_audit_log.sql`** - **IMPORTANT**: Recreates healer_audit_log with correct schema that the code uses
-4. **`migration_add_ai_metadata.sql`** - Adds AI metadata column to webhook_events (skip the healer_audit_log CREATE TABLE in this file, it's already created by previous migration)
-5. **`migration_add_drift_snapshots.sql`** - Creates drift snapshot table for historical charting
+| # | Migration | Purpose |
+|---|-----------|---------|
+| 1 | `migration_add_resolution_notes.sql` | Adds `resolution_notes` to anomalies |
+| 2 | `migration_fix_healer_audit_log.sql` | **CRITICAL**: Creates `healer_audit_log` with correct schema |
+| 3 | `migration_add_drift_snapshots.sql` | Creates drift snapshot table |
+| 4 | `migration_add_ai_metadata.sql` | Adds `ai_metadata` JSONB to `webhook_events` (⚠️ Skip the CREATE TABLE part) |
 
-**CRITICAL**: You MUST run `migration_fix_healer_audit_log.sql` to fix the schema mismatch. The old migration created the wrong columns.
+**⚠️ Important**: Do NOT run `migration_add_healer_audit_log.sql` - it has the wrong schema. Use `migration_fix_healer_audit_log.sql` instead.
 
-All migrations are idempotent (use `IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`) and can be run multiple times safely.
+All migrations are idempotent and can be run multiple times safely.
+
+## Troubleshooting
+
+### AI Agent Audit Log is Empty
+
+**Cause**: Schema mismatch in `healer_audit_log` table.
+
+**Fix**: Run `backend/src/db/QUICK_FIX_healer_audit_log.sql` in Supabase SQL Editor, then restart backend.
+
+### AI Recovery Rate Stays at 0%
+
+**Cause**: No rows in `healer_audit_log` (see above).
+
+**Verify**: Check backend console for `[HealerAudit]` messages. If you see "Failed to record audit trail", the schema is wrong.
+
+### Open Anomalies Not Auto-Resolving
+
+Anomalies auto-resolve when:
+- ✅ Heal job successfully fetches and replays events from gateway
+- ✅ Manual refetch completes successfully
+
+Anomalies stay open when:
+- ❌ Gateway returns 503 (outage) after 3 attempts
+- ❌ State conflict detected (ledger vs gateway mismatch)
+
+### Heal Jobs Not Processing
+
+**Check Redis connection**:
+```bash
+# Verify UPSTASH_REDIS_URL is set in .env
+echo $UPSTASH_REDIS_URL
+```
+
+**Check worker logs**:
+```bash
+# Look for these in backend console:
+[HealWorker] Processing job
+[AutoHealer] Fetched from gateway
+[AutoHealer] Auto-resolved X anomalies
+```
+
+### Dashboard Metrics Not Updating
+
+- Dashboard auto-refreshes every **10 seconds**
+- Check browser console for API errors
+- Verify backend is running: `curl http://localhost:3000/health`
