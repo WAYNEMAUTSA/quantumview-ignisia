@@ -30,7 +30,7 @@ router.post('/razorpay', async (req: Request, res: Response) => {
     }
 
     // If the healer created synthetic bridge events, report it
-    if (result.status === 'synthetic_bridge') {
+    if (result.status === 'healed') {
       return res.status(200).json({
         received: true,
         eventId: ctx.gatewayTxnId,

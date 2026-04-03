@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import axios from 'axios';
 import { BASE_URL } from '../lib/api';
-import { TrendingDown, Heart, Webhook, AlertTriangle } from 'lucide-react';
+import { TrendingDown, Heart, Webhook, AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 
 interface Metrics {
@@ -10,6 +10,16 @@ interface Metrics {
   healSuccessRate: number;
   totalWebhooks: number;
   openAnomalies: number;
+  healStats: {
+    totalEvents: number;
+    healedEvents: number;
+    normalEvents: number;
+    totalAgentInterventions: number;
+    healed: number;
+    suppressed: number;
+    processed: number;
+    recoveryRate: number;
+  };
 }
 
 interface DriftDataPoint {
@@ -38,15 +48,17 @@ export default function Dashboard() {
   const [driftHistory, setDriftHistory] = useState<DriftDataPoint[]>([]);
   const [webhookVolume, setWebhookVolume] = useState<WebhookVolume[]>([]);
   const [healActivity, setHealActivity] = useState<HealActivity[]>([]);
+  const [healerHistory, setHealerHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchMetrics = async () => {
     try {
-      const [metricsRes, anomaliesRes, transactionsRes, driftHistoryRes] = await Promise.all([
+      const [metricsRes, anomaliesRes, transactionsRes, driftHistoryRes, healerHistoryRes] = await Promise.all([
         axios.get<Metrics>(`${BASE_URL}/metrics`),
         axios.get(`${BASE_URL}/anomalies`),
         axios.get(`${BASE_URL}/transactions?limit=1000`),
         axios.get(`${BASE_URL}/metrics/drift-history`),
+        axios.get(`${BASE_URL}/metrics/healer-history`),
       ]);
 
       const data = metricsRes.data;
@@ -55,6 +67,9 @@ export default function Dashboard() {
       // Real drift history from drift_snapshots
       const driftData = driftHistoryRes.data.data || [];
       setDriftHistory(driftData);
+
+      // Healer agent history
+      setHealerHistory(healerHistoryRes.data.data || []);
 
       // Real transaction states breakdown from transactions data
       const transactions = transactionsRes.data.data || [];
@@ -175,6 +190,20 @@ export default function Dashboard() {
             {hasManualQueue ? 'Needs review' : 'All resolved'}
           </p>
         </div>
+
+        {/* Recovery Rate */}
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-600">AI Recovery Rate</span>
+            <ShieldCheck className="h-5 w-5 text-purple-600" />
+          </div>
+          <p className="text-3xl font-bold text-purple-600">
+            {metrics.healStats?.recoveryRate.toFixed(1) ?? 0}%
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            {metrics.healStats?.totalAgentInterventions ?? 0} interventions
+          </p>
+        </div>
       </div>
 
       {/* Charts */}
@@ -232,26 +261,67 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Activity</h3>
-        {healActivity.length === 0 ? (
-          <p className="text-sm text-gray-500 py-8 text-center">No recent activity. Ledger is healthy.</p>
-        ) : (
-          <div className="divide-y">
-            {healActivity.map((activity) => (
-              <div key={activity.id} className="py-3 flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{activity.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">{activity.transaction_id}</p>
+      {/* Healer Audit Log + Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* AI Agent Audit Log */}
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Shield className="h-5 w-5 text-purple-600" />
+            AI Agent Audit Log
+          </h3>
+          {healerHistory.length === 0 ? (
+            <p className="text-sm text-gray-500 py-8 text-center">No agent interventions yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {healerHistory.slice(0, 15).map((entry: any) => (
+                <div key={entry.id} className="text-xs border-b border-gray-100 pb-3 last:border-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-block px-2 py-0.5 rounded-full font-medium ${
+                        entry.outcome === 'healed' ? 'bg-green-100 text-green-700' :
+                        entry.outcome === 'suppressed' ? 'bg-amber-100 text-amber-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {entry.outcome === 'healed' ? 'HEALED_BY_AI' :
+                         entry.outcome === 'suppressed' ? 'SUPPRESSED' : 'PROCESSED'}
+                      </span>
+                      <span className="font-mono text-gray-600">{entry.gateway_txn_id}</span>
+                    </div>
+                    <span className="text-gray-500">{entry.created_at}</span>
+                  </div>
+                  {entry.actions && entry.actions.length > 0 && (
+                    <p className="text-gray-700 mt-1">{entry.actions.join(' → ')}</p>
+                  )}
+                  {entry.bridge_events > 0 && (
+                    <p className="text-gray-500 mt-1">{entry.bridge_events} bridge event(s) synthesized</p>
+                  )}
                 </div>
-                <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                  {new Date(activity.created_at).toLocaleTimeString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Activity */}
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Activity</h3>
+          {healActivity.length === 0 ? (
+            <p className="text-sm text-gray-500 py-8 text-center">No recent activity. Ledger is healthy.</p>
+          ) : (
+            <div className="divide-y">
+              {healActivity.map((activity) => (
+                <div key={activity.id} className="py-3 flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{activity.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">{activity.transaction_id}</p>
+                  </div>
+                  <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
+                    {new Date(activity.created_at).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

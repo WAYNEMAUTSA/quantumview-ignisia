@@ -126,6 +126,39 @@ router.get('/', async (_req: Request, res: Response) => {
       .select('*', { count: 'exact', head: true })
       .is('resolved_at', null);
 
+    // ── Healer stats ──
+    const { count: healedEvents } = await supabase
+      .from('webhook_events')
+      .select('*', { count: 'exact', head: true })
+      .not('raw_payload', 'is', null)
+      .contains('raw_payload', { healed: true });
+
+    const { count: totalEvents } = await supabase
+      .from('webhook_events')
+      .select('*', { count: 'exact', head: true });
+
+    // ── Healer audit log summary ──
+    const { count: totalHealed } = await supabase
+      .from('healer_audit_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('outcome', 'healed');
+
+    const { count: totalSuppressed } = await supabase
+      .from('healer_audit_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('outcome', 'suppressed');
+
+    const { count: totalProcessed } = await supabase
+      .from('healer_audit_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('outcome', 'processed');
+
+    const totalInterventions = (totalHealed ?? 0) + (totalSuppressed ?? 0);
+    const totalAgentActions = (totalProcessed ?? 0) + totalInterventions;
+    const recoveryRate = totalAgentActions > 0
+      ? (totalInterventions / totalAgentActions) * 100
+      : 0;
+
     return res.json({
       driftRate: parseFloat(driftRate.toFixed(1)),
       driftBreakdown: {
@@ -135,6 +168,16 @@ router.get('/', async (_req: Request, res: Response) => {
         dropped: droppedCount,
         outOfOrder: outOfOrderCount,
         duplicates: duplicateCount,
+      },
+      healStats: {
+        totalEvents: totalEvents ?? 0,
+        healedEvents: healedEvents ?? 0,
+        normalEvents: (totalEvents ?? 0) - (healedEvents ?? 0),
+        totalAgentInterventions: totalInterventions,
+        healed: totalHealed ?? 0,
+        suppressed: totalSuppressed ?? 0,
+        processed: totalProcessed ?? 0,
+        recoveryRate: parseFloat(recoveryRate.toFixed(1)),
       },
       healSuccessRate: parseFloat(healSuccessRate.toFixed(1)),
       totalWebhooks: totalWebhooks ?? 0,
@@ -168,6 +211,38 @@ router.get('/drift-history', async (_req: Request, res: Response) => {
       duplicates: s.duplicate_count,
       total: s.total_recent_txns,
       drifted: s.drifted_txns,
+    }));
+
+    return res.json({ data: formatted });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /metrics/healer-history — last 50 healer agent interventions
+router.get('/healer-history', async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('healer_audit_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw new Error(error.message);
+
+    const formatted = (data || []).map((s) => ({
+      id: s.id,
+      gateway_txn_id: s.gateway_txn_id?.substring(0, 20) + '...',
+      outcome: s.outcome,
+      bridge_events: s.bridge_events_synthesized,
+      confidence: s.confidence_score,
+      actions: s.actions_taken,
+      reasoning: s.reasoning_trail,
+      created_at: new Date(s.created_at).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
     }));
 
     return res.json({ data: formatted });
