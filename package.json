@@ -1,0 +1,38 @@
+{
+  "name": "quantumview-ignisia",
+  "version": "1.0.0",
+  "description": "Webhook Reconciliation Engine",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WAYNEMAUTSA/quantumview-ignisia.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/WAYNEMAUTSA/quantumview-ignisia/issues"
+  },
+  "homepage": "https://github.com/WAYNEMAUTSA/quantumview-ignisia#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.0",
+    "bullmq": "^5.40.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.2",
+    "@types/node": "^24.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
