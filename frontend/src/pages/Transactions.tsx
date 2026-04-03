@@ -47,7 +47,6 @@ export default function Transactions() {
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      setLoading(true);
       try {
         const params: Record<string, any> = { limit, page };
         if (stateFilter) params.state = stateFilter;
@@ -63,6 +62,9 @@ export default function Transactions() {
     };
 
     fetchTransactions();
+    // Real-time polling every 5 seconds
+    const interval = setInterval(fetchTransactions, 5000);
+    return () => clearInterval(interval);
   }, [stateFilter, gatewayFilter, page]);
 
   const gateways = useMemo(() => {

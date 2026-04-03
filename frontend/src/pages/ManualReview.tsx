@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { BASE_URL } from '../lib/api';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw, Loader2, X } from 'lucide-react';
 
 interface Anomaly {
   id: string;
@@ -11,6 +11,11 @@ interface Anomaly {
   description: string;
   resolved_at: string | null;
   created_at: string;
+  transactions?: {
+    gateway: string;
+    gateway_txn_id: string;
+    amount: number;
+  };
 }
 
 export default function ManualReview() {
@@ -20,8 +25,12 @@ export default function ManualReview() {
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
   const [resolveNote, setResolveNote] = useState('');
   const [resolving, setResolving] = useState(false);
+  const [refetching, setRefetching] = useState<string | null>(null);
+  const [refetchResult, setRefetchResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAnomalies = async () => {
+  const fetchAnomalies = useCallback(async () => {
+    setRefreshing(true);
     try {
       const res = await axios.get(`${BASE_URL}/anomalies`);
       setAnomalies(res.data.data || []);
@@ -29,17 +38,19 @@ export default function ManualReview() {
       console.error('Failed to fetch anomalies:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAnomalies();
     const interval = setInterval(fetchAnomalies, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAnomalies]);
 
   const handleResolve = async (anomaly: Anomaly) => {
     setSelectedAnomaly(anomaly);
+    setResolveNote('');
     setResolveModalOpen(true);
   };
 
@@ -49,18 +60,40 @@ export default function ManualReview() {
     setResolving(true);
     try {
       await axios.patch(`${BASE_URL}/anomalies/${selectedAnomaly.id}/resolve`, {
-        note: resolveNote || 'Manually resolved',
+        note: resolveNote || 'Manually resolved via review queue',
+        targetState: 'captured',
       });
 
-      // Refresh anomalies
-      await fetchAnomalies();
+      // Remove resolved anomaly from list immediately
+      setAnomalies((prev) => prev.filter((a) => a.id !== selectedAnomaly.id));
       setResolveModalOpen(false);
       setResolveNote('');
       setSelectedAnomaly(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to resolve anomaly:', err);
     } finally {
       setResolving(false);
+    }
+  };
+
+  const handleRefetch = async (anomaly: Anomaly) => {
+    setRefetching(anomaly.id);
+    setRefetchResult(null);
+    try {
+      const res = await axios.post(`${BASE_URL}/anomalies/${anomaly.id}/refetch`);
+      setRefetchResult({
+        success: true,
+        message: res.data.message || `Replayed ${res.data.replayed} events.`,
+      });
+      // Refresh anomalies to see updated state
+      await fetchAnomalies();
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Failed to re-fetch from gateway';
+      setRefetchResult({ success: false, message: msg });
+    } finally {
+      setRefetching(null);
+      // Auto-clear result after 5 seconds
+      setTimeout(() => setRefetchResult(null), 5000);
     }
   };
 
@@ -84,10 +117,36 @@ export default function ManualReview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Manual Review Queue</h2>
-        <p className="text-sm text-gray-600">{unresolvedAnomalies.length} unresolved anomalies</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Manual Review Queue</h2>
+          <p className="text-sm text-gray-600">{unresolvedAnomalies.length} unresolved anomalies</p>
+        </div>
+        <button
+          onClick={fetchAnomalies}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-2 rounded border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
+
+      {/* Refetch result banner */}
+      {refetchResult && (
+        <div
+          className={`rounded-lg border p-4 flex items-center justify-between ${
+            refetchResult.success
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <p className="text-sm font-medium">{refetchResult.message}</p>
+          <button onClick={() => setRefetchResult(null)} className="ml-3">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Anomaly Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -127,8 +186,22 @@ export default function ManualReview() {
                 >
                   Resolve Manually
                 </button>
-                <button className="flex-1 px-3 py-2 rounded border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
-                  Re-fetch
+                <button
+                  onClick={() => handleRefetch(anomaly)}
+                  disabled={refetching === anomaly.id}
+                  className="flex-1 px-3 py-2 rounded border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition flex items-center justify-center gap-1"
+                >
+                  {refetching === anomaly.id ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Fetching...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3 w-3" />
+                      Re-fetch
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -161,7 +234,11 @@ export default function ManualReview() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setResolveModalOpen(false)}
+                onClick={() => {
+                  setResolveModalOpen(false);
+                  setResolveNote('');
+                  setSelectedAnomaly(null);
+                }}
                 disabled={resolving}
                 className="flex-1 px-4 py-2 rounded border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
               >
@@ -170,9 +247,16 @@ export default function ManualReview() {
               <button
                 onClick={submitResolve}
                 disabled={resolving}
-                className="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {resolving ? 'Resolving...' : 'Confirm'}
+                {resolving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Resolving...
+                  </>
+                ) : (
+                  'Confirm'
+                )}
               </button>
             </div>
           </div>
@@ -181,4 +265,3 @@ export default function ManualReview() {
     </div>
   );
 }
-

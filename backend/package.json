@@ -6,7 +6,10 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "npx ts-node-esm src/index.ts"
+    "dev": "tsx src/index.ts",
+    "injector:start": "tsx src/scripts/randomInjector.ts start",
+    "injector:stop": "tsx src/scripts/randomInjector.ts stop",
+    "injector:status": "tsx src/scripts/randomInjector.ts status"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -22,6 +25,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.16.5",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.3"
   }
 }

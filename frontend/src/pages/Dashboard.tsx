@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import axios from 'axios';
 import { BASE_URL } from '../lib/api';
 import { TrendingDown, Heart, Webhook, AlertTriangle } from 'lucide-react';
@@ -18,8 +18,9 @@ interface DriftDataPoint {
 }
 
 interface WebhookVolumeData {
-  gateway: string;
+  state: string;
   count: number;
+  fill: string;
 }
 
 interface HealActivity {
@@ -55,18 +56,30 @@ export default function Dashboard() {
         return updated.slice(-12); // Keep last 12 data points
       });
 
-      // Real gateway breakdown from transactions data
+      // Real transaction states breakdown from transactions data
       const transactions = transactionsRes.data.data || [];
-      const gatewayMap: Record<string, number> = {};
+      const stateMap: Record<string, number> = {};
       transactions.forEach((tx: any) => {
-        const gateway = tx.gateway || 'Unknown';
-        gatewayMap[gateway] = (gatewayMap[gateway] || 0) + 1;
+        const state = tx.current_state || 'unknown';
+        stateMap[state] = (stateMap[state] || 0) + 1;
       });
 
-      const realVolume = Object.entries(gatewayMap)
-        .map(([gateway, count]) => ({
-          gateway: gateway.charAt(0).toUpperCase() + gateway.slice(1),
+      const stateColors: Record<string, string> = {
+        initiated: '#3b82f6',
+        created: '#6366f1',
+        authorized: '#8b5cf6',
+        captured: '#10b981',
+        settled: '#22c55e',
+        failed: '#ef4444',
+        refunded: '#6366f1',
+        unknown: '#f59e0b',
+      };
+
+      const realVolume = Object.entries(stateMap)
+        .map(([state, count]) => ({
+          state: state.charAt(0).toUpperCase() + state.slice(1),
           count,
+          fill: stateColors[state] || '#94a3b8',
         }))
         .sort((a, b) => b.count - a.count);
 
@@ -192,17 +205,21 @@ export default function Dashboard() {
 
         {/* Webhook Volume by Gateway */}
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Webhook Volume by Gateway</h3>
+          <h3 className="text-base font-semibold text-gray-900 mb-4">Transaction States</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={webhookVolume}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="gateway" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+              <XAxis dataKey="state" tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <Tooltip
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
                 labelStyle={{ color: '#111827' }}
               />
-              <Bar dataKey="count" fill="#2563eb" radius={[8, 8, 0, 0]} name="Events" />
+              <Bar dataKey="count" radius={[8, 8, 0, 0]} name="Transactions">
+                {webhookVolume.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
