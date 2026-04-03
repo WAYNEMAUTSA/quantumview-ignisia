@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { HealJobData } from '../types';
+import { HealJobData } from '../types/index.js';
 
 const connection = new IORedis(process.env.UPSTASH_REDIS_URL as string, {
   maxRetriesPerRequest: null,

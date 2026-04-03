@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
-import { healTransaction } from '../services/autoHealer';
+import { healTransaction } from '../services/autoHealer.js';
 
 const connection = new IORedis(process.env.UPSTASH_REDIS_URL as string, {
   maxRetriesPerRequest: null,

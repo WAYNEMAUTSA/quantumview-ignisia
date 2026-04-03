@@ -2,15 +2,15 @@ import 'dotenv/config'
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import webhookRouter from './routes/webhook';
-import mockRouter from './routes/mock';
-import transactionsRouter from './routes/transactions';
-import metricsRouter from './routes/metrics';
-import anomaliesRouter from './routes/anomalies';
-import { webhookWorker } from './workers/webhookWorker';
-import { healWorker } from './workers/healWorker';
-import { startDataInjector } from './services/dataInjector';
-import injectorRouter from './routes/injector';
+import webhookRouter from './routes/webhook.js';
+import mockRouter from './routes/mock.js';
+import transactionsRouter from './routes/transactions.js';
+import metricsRouter from './routes/metrics.js';
+import anomaliesRouter from './routes/anomalies.js';
+import { webhookWorker } from './workers/webhookWorker.js';
+import { healWorker } from './workers/healWorker.js';
+import { startDataInjector } from './services/dataInjector.js';
+import injectorRouter from './routes/injector.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

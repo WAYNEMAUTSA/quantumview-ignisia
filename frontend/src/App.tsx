@@ -1,9 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import ManualReview from './pages/ManualReview';
-import axios from 'axios';
-import { BASE_URL } from './lib/api';
 import { Clock } from 'lucide-react';
 
 type Tab = 'dashboard' | 'transactions' | 'manual-review';
@@ -18,8 +16,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [liveTime, setLiveTime] = useState(new Date());
 
-  // Update timestamp every 5 seconds
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(() => setLiveTime(new Date()), 5000);
     return () => clearInterval(interval);
   }, []);
@@ -35,7 +32,6 @@ export default function App() {
     }
   };
 
-function App() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -82,5 +78,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

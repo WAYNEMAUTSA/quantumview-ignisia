@@ -3,7 +3,7 @@ import {
   startDataInjector,
   stopDataInjector,
   getInjectorStatus,
-} from '../services/dataInjector';
+} from '../services/dataInjector.js';
 
 const router = Router();
 

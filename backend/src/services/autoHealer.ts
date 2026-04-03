@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { supabase } from '../db/supabase';
-import { applyEvent } from './stateMachine';
-import { NormalizedEvent, TransactionState } from '../types';
+import { supabase } from '../db/supabase.js';
+import { applyEvent } from './stateMachine.js';
+import { NormalizedEvent, TransactionState } from '../types/index.js';
 
 export async function healTransaction(
   transactionId: string,

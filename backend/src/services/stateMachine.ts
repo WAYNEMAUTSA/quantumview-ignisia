@@ -1,7 +1,7 @@
-import { supabase } from '../db/supabase';
-import { healQueue } from '../queues';
-import { NormalizedEvent } from '../types';
-import { getMissingStates } from './gapDetector';
+import { supabase } from '../db/supabase.js';
+import { healQueue } from '../queues/index.js';
+import { NormalizedEvent } from '../types/index.js';
+import { getMissingStates } from './gapDetector.js';
 
 export async function applyEvent(event: NormalizedEvent): Promise<void> {
   // Step 1: Upsert into transactions table

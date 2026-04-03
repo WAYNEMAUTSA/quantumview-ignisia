@@ -1,5 +1,5 @@
-import { supabase } from '../db/supabase';
-import { TransactionState } from '../types';
+import { supabase } from '../db/supabase.js';
+import { TransactionState } from '../types/index.js';
 
 // The expected order of lifecycle states for a healthy transaction
 const LIFECYCLE_ORDER: TransactionState[] = [

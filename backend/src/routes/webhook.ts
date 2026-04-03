@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { applyEvent } from '../services/stateMachine';
-import { NormalizedEvent } from '../types';
+import { applyEvent } from '../services/stateMachine.js';
+import { NormalizedEvent } from '../types/index.js';
 
 const router = Router();
 

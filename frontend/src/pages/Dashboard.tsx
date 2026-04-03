@@ -3,18 +3,21 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import axios from 'axios';
 import { BASE_URL } from '../lib/api';
 import { TrendingDown, Heart, Webhook, AlertTriangle } from 'lucide-react';
+import { useToast } from '../hooks/use-toast';
 
-export function Dashboard() {
-  const { toast } = useToast();
-  const [driftData, setDriftData] = useState<DriftDataPoint[]>([]);
-  const [webhookVolume, setWebhookVolume] = useState<WebhookVolumeData[]>([]);
+interface Metrics {
+  driftRate: number;
+  healSuccessRate: number;
+  totalWebhooks: number;
+  openAnomalies: number;
+}
 
 interface DriftDataPoint {
   timestamp: string;
   driftRate: number;
 }
 
-interface WebhookVolume {
+interface WebhookVolumeData {
   gateway: string;
   count: number;
 }
