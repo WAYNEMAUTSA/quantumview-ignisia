@@ -64,15 +64,14 @@ router.post('/simulate', async (req: Request, res: Response) => {
     };
   }
 
-  let fired = 0;
+  const payloads: { event: string; txnId: string }[] = [];
 
   if (scenario === 'normal') {
     const ids = ['pay_NORMAL001', 'pay_NORMAL002', 'pay_NORMAL003'];
     const events = ['payment.created', 'payment.authorized', 'payment.captured'];
     for (const txnId of ids) {
       for (const evt of events) {
-        await axios.post(webhookUrl, razorpayPayload(evt, txnId));
-        fired++;
+        payloads.push({ event: evt, txnId });
       }
     }
   }
@@ -80,11 +79,8 @@ router.post('/simulate', async (req: Request, res: Response) => {
   if (scenario === 'out_of_order') {
     const ids = ['pay_OOO001', 'pay_OOO002'];
     for (const txnId of ids) {
-      // Fire captured BEFORE authorized (out of order)
-      await axios.post(webhookUrl, razorpayPayload('payment.captured', txnId));
-      fired++;
-      await axios.post(webhookUrl, razorpayPayload('payment.authorized', txnId));
-      fired++;
+      payloads.push({ event: 'payment.captured', txnId });
+      payloads.push({ event: 'payment.authorized', txnId });
     }
   }
 
@@ -92,19 +88,15 @@ router.post('/simulate', async (req: Request, res: Response) => {
     const ids = Array.from({ length: 10 }, (_, i) => `pay_SURGE${String(i + 1).padStart(3, '0')}`);
     const events = ['payment.created', 'payment.authorized', 'payment.captured'];
 
-    // First round: 10 unique transactions × 3 events = 30 webhooks
     for (const txnId of ids) {
       for (const evt of events) {
-        await axios.post(webhookUrl, razorpayPayload(evt, txnId));
-        fired++;
+        payloads.push({ event: evt, txnId });
       }
     }
-
-    // Second round: repeat all 30 as duplicates
+    // Duplicates
     for (const txnId of ids) {
       for (const evt of events) {
-        await axios.post(webhookUrl, razorpayPayload(evt, txnId));
-        fired++;
+        payloads.push({ event: evt, txnId });
       }
     }
   }
@@ -112,13 +104,25 @@ router.post('/simulate', async (req: Request, res: Response) => {
   if (scenario === 'dropped') {
     const ids = ['pay_DROP001', 'pay_DROP002'];
     for (const txnId of ids) {
-      // Only fire captured — skip created and authorized
-      await axios.post(webhookUrl, razorpayPayload('payment.captured', txnId));
-      fired++;
+      payloads.push({ event: 'payment.captured', txnId });
     }
   }
 
-  return res.status(200).json({ fired, scenario });
+  // Fire webhooks sequentially with small delay to avoid overwhelming the server
+  let fired = 0;
+  let failed = 0;
+  for (const { event, txnId } of payloads) {
+    try {
+      await axios.post(webhookUrl, razorpayPayload(event, txnId), { timeout: 5000 });
+      fired++;
+    } catch {
+      failed++;
+    }
+    // Small delay between requests
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  return res.status(200).json({ fired, failed, scenario });
 });
 
 export default router;
