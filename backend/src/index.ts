@@ -7,6 +7,7 @@ import mockRouter from './routes/mock.js';
 import transactionsRouter from './routes/transactions.js';
 import metricsRouter from './routes/metrics.js';
 import anomaliesRouter from './routes/anomalies.js';
+import securityRouter from './routes/security.js';
 import { webhookWorker } from './workers/webhookWorker.js';
 import { healWorker } from './workers/healWorker.js';
 import { startDataInjector } from './services/dataInjector.js';
@@ -35,6 +36,7 @@ app.use('/transactions', transactionsRouter);
 app.use('/metrics', metricsRouter);
 app.use('/anomalies', anomaliesRouter); // Includes POST /anomalies/auto-handle
 app.use('/injector', injectorRouter);
+app.use('/security', securityRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

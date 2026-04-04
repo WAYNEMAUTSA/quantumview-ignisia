@@ -7,9 +7,26 @@ import {
 
 const router = Router();
 
-type InjectorProfile = 'realistic' | 'balanced' | 'chaos' | 'normal-only';
+type InjectorProfile = 'realistic' | 'balanced' | 'chaos' | 'normal-only' | 'fraud';
 
 function getProfileConfig(profile?: InjectorProfile) {
+  if (profile === 'fraud') {
+    return {
+      intervalMs: 2000,
+      batchSize: 2,
+      scenarioWeights: {
+        normal: 20,
+        duplicate: 10,
+        out_of_order: 0,
+        dropped: 0,
+        invalid_payload: 0,
+        gateway_outage: 0,
+        state_conflict: 0,
+        fraud_replay: 70, // Heavy fraud injection
+      },
+    };
+  }
+
   if (profile === 'normal-only') {
     return {
       intervalMs: 5000,
@@ -22,6 +39,7 @@ function getProfileConfig(profile?: InjectorProfile) {
         invalid_payload: 0,
         gateway_outage: 0,
         state_conflict: 0,
+        fraud_replay: 0,
       },
     };
   }
@@ -38,6 +56,7 @@ function getProfileConfig(profile?: InjectorProfile) {
         invalid_payload: 0,
         gateway_outage: 2,
         state_conflict: 1,
+        fraud_replay: 0,
       },
     };
   }
@@ -54,6 +73,7 @@ function getProfileConfig(profile?: InjectorProfile) {
         invalid_payload: 5,
         gateway_outage: 10,
         state_conflict: 10,
+        fraud_replay: 0,
       },
     };
   }
@@ -70,6 +90,7 @@ function getProfileConfig(profile?: InjectorProfile) {
       invalid_payload: 0,
       gateway_outage: 1,
       state_conflict: 1,
+      fraud_replay: 0,
     },
   };
 }

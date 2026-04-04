@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { extractRazorpayContext, chaosHealer } from '../agents/chaosHealer.js';
+import { fraudDetectionMiddleware } from '../middleware/fraudDetection.js';
 import { supabase } from '../db/supabase.js';
 
 const router = Router();
 
-// POST /webhook/razorpay — incoming Razorpay webhook with real-time chaos healing
-router.post('/razorpay', async (req: Request, res: Response) => {
+// POST /webhook/razorpay — incoming Razorpay webhook with fraud detection + chaos healing
+router.post('/razorpay', fraudDetectionMiddleware, async (req: Request, res: Response) => {
   try {
     const body = req.body;
 

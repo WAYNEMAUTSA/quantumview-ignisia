@@ -2,16 +2,18 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import ManualReview from './pages/ManualReview';
+import SecurityDashboard from './pages/SecurityDashboard';
 import DashboardShell from './components/DashboardShell';
 import HeaderBanner from './components/HeaderBanner';
-import { Activity, Database, Brain } from 'lucide-react';
+import { Activity, Database, Brain, Shield } from 'lucide-react';
 
-type Tab = 'dashboard' | 'transactions' | 'manual-review';
+type Tab = 'dashboard' | 'transactions' | 'manual-review' | 'security';
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Live Overview', icon: <Activity style={{ width: 18, height: 18 }} /> },
   { key: 'transactions', label: 'Transactions', icon: <Database style={{ width: 18, height: 18 }} /> },
   { key: 'manual-review', label: 'AI Review', icon: <Brain style={{ width: 18, height: 18 }} /> },
+  { key: 'security', label: 'Security', icon: <Shield style={{ width: 18, height: 18 }} /> },
 ];
 
 export default function App() {
@@ -76,6 +78,7 @@ export default function App() {
       case 'dashboard': return <Dashboard />;
       case 'transactions': return <Transactions />;
       case 'manual-review': return <ManualReview />;
+      case 'security': return <SecurityDashboard />;
     }
   };
 

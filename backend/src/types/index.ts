@@ -20,6 +20,35 @@ export type AnomalyType =
   | 'duplicate'
   | 'missing_event';
 
+export interface FraudAssessment {
+  isFraud: boolean;
+  riskScore: number;           // 0–100
+  timeDeltaMs: number;         // ms between first and latest attempt
+  headerConsistency: number;   // 0–1 (1 = identical headers)
+  flaggedFields: string[];     // which headers/values changed
+  assessment: 'block' | 'drop' | 'allow';
+  reasoning: string;
+}
+
+export interface SecurityLogEntry {
+  id?: string;
+  gateway_txn_id: string;
+  event_type: string;
+  risk_score: number;
+  fraud_flag: boolean;
+  assessment: 'block' | 'drop' | 'allow';
+  original_timestamp: string;
+  retry_timestamp: string;
+  time_delta_ms: number;
+  header_consistency: number;
+  flagged_fields: string[];
+  request_headers: Record<string, string>;
+  original_headers: Record<string, string>;
+  ip_address: string;
+  user_agent: string;
+  created_at?: string;
+}
+
 export interface NormalizedEvent {
   gatewayTxnId: string;
   gateway: string;

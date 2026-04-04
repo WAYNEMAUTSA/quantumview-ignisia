@@ -87,48 +87,70 @@ export async function healTransaction(
     throw new Error(`Failed to call gateway fetch: ${err.message}`);
   }
 
-  // Step 4: Handle 503 gateway outage — create anomaly immediately
+  // Step 4: Handle 503 gateway outage — create anomaly only if none exists
   if (response.status === 503) {
-    // Create anomaly on first 503 — don't wait for retries
-    // This ensures anomalies are visible in the AI Review queue
-    await supabase.from('anomalies').insert({
-      transaction_id: transactionId,
-      type: 'gateway_outage',
-      severity: 'high',
-      description:
-        'Razorpay returned 503 — gateway unreachable. AI review required.',
-    });
+    // Check if an open anomaly already exists for this transaction
+    const { data: existingAnomaly } = await supabase
+      .from('anomalies')
+      .select('id')
+      .eq('transaction_id', transactionId)
+      .is('resolved_at', null)
+      .maybeSingle();
+
+    if (!existingAnomaly) {
+      // Only create anomaly if there isn't one already — prevents spam
+      await supabase.from('anomalies').insert({
+        transaction_id: transactionId,
+        type: 'gateway_outage',
+        severity: 'high',
+        description:
+          'Razorpay returned 503 — gateway unreachable. AI review required.',
+      });
+      console.log(`[AutoHealer] Gateway outage anomaly created for txn ${transactionId}`);
+    } else {
+      console.log(`[AutoHealer] Gateway outage — anomaly already exists for txn ${transactionId}, skipping creation`);
+    }
 
     await supabase
       .from('heal_jobs')
       .update({ status: 'failed' })
       .eq('id', healJobId);
 
-    console.log(`[AutoHealer] Gateway outage anomaly created for txn ${transactionId}`);
     return;
   }
 
-  // Step 5: Handle conflict — create anomaly for AI review
+  // Step 5: Handle conflict — create anomaly only if none exists
   if (response.data.status === 'conflict') {
     const conflictData = response.data.transaction;
     const ledgerState = conflictData?.ledger_state ?? 'unknown';
     const gatewayState = conflictData?.gateway_state ?? 'unknown';
 
-    // Create anomaly — let AI decide how to resolve
-    await supabase.from('anomalies').insert({
-      transaction_id: transactionId,
-      type: 'conflict',
-      severity: 'high',
-      description:
-        `State conflict: ledger shows '${ledgerState}' but gateway reports '${gatewayState}'. AI review required.`,
-    });
+    // Check if an open anomaly already exists
+    const { data: existingAnomaly } = await supabase
+      .from('anomalies')
+      .select('id')
+      .eq('transaction_id', transactionId)
+      .is('resolved_at', null)
+      .maybeSingle();
+
+    if (!existingAnomaly) {
+      await supabase.from('anomalies').insert({
+        transaction_id: transactionId,
+        type: 'conflict',
+        severity: 'medium', // Downgraded from 'high' — most conflicts resolve themselves
+        description:
+          `State conflict: ledger shows '${ledgerState}' but gateway reports '${gatewayState}'. AI review required.`,
+      });
+      console.log(`[AutoHealer] Conflict anomaly created for txn ${transactionId}: ${ledgerState} vs ${gatewayState}`);
+    } else {
+      console.log(`[AutoHealer] Conflict — anomaly already exists for txn ${transactionId}, skipping creation`);
+    }
 
     await supabase
       .from('heal_jobs')
       .update({ status: 'failed' })
       .eq('id', healJobId);
 
-    console.log(`[AutoHealer] Conflict anomaly created for txn ${transactionId}: ${ledgerState} vs ${gatewayState}`);
     return;
   }
 

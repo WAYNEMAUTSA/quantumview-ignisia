@@ -7,33 +7,35 @@ type InjectorScenario =
   | 'dropped'
   | 'invalid_payload'
   | 'gateway_outage'
-  | 'state_conflict';
+  | 'state_conflict'
+  | 'fraud_replay';
 
 interface InjectorConfig {
   enabled: boolean;
-  intervalMs: number; // How often to inject a batch
-  batchSize: number; // How many transactions per batch
-  eventSequence: string[]; // Event types to fire in order
-  scenarioWeights: Record<InjectorScenario, number>; // Relative probability per scenario
+  intervalMs: number;
+  batchSize: number;
+  eventSequence: string[];
+  scenarioWeights: Record<InjectorScenario, number>;
 }
 
 const DEFAULT_CONFIG: InjectorConfig = {
   enabled: true,
-  intervalMs: 1500, // Inject a batch every 1.5 seconds
-  batchSize: 3, // 3 transactions per batch
+  intervalMs: 1500,
+  batchSize: 3,
   eventSequence: [
     'payment.created',
     'payment.authorized',
     'payment.captured',
   ],
   scenarioWeights: {
-    normal: 65,
+    normal: 55,
     duplicate: 5,
     out_of_order: 5,
     dropped: 10,
     invalid_payload: 0,
     gateway_outage: 8,
     state_conflict: 7,
+    fraud_replay: 10, // 10% of injections are fraud replays
   },
 };
 
@@ -170,6 +172,38 @@ async function injectScenario(
   // These scenarios intentionally force the healer to hit mock edge cases.
   if (scenario === 'gateway_outage' || scenario === 'state_conflict') {
     await send('payment.captured');
+  }
+
+  // FRAUD REPLAY — simulates replay attacks for security dashboard testing
+  if (scenario === 'fraud_replay') {
+    const fraudTxnId = `pay_FRAUD_${Date.now().toString().slice(-6)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+
+    // Phase 1: Send legitimate event first
+    const legitPayload = makePayload(fraudTxnId, 'payment.captured');
+    legitPayload._original_headers = {
+      'x-razorpay-signature': `sig_${Math.random().toString(36).substring(2, 10)}`,
+      'x-forwarded-for': '192.168.1.100',
+      'user-agent': 'Razorpay-Webhook/1.0',
+    };
+    await send('payment.captured', legitPayload);
+
+    // Phase 2: Wait a realistic delay (simulates attacker capturing and replaying later)
+    const delayMs = Math.random() > 0.5 ? 3000 : 15000; // 50% short delay, 50% long delay
+    await sleep(delayMs);
+
+    // Phase 3: Send the REPLAY — same event type + txn ID but with DIFFERENT headers
+    // This triggers the fraud detection middleware
+    const replayPayload = makePayload(fraudTxnId, 'payment.captured');
+    // Deliberately change headers to simulate a replay from different source
+    replayPayload._original_headers = {
+      'x-razorpay-signature': `sig_FAKE_${Math.random().toString(36).substring(2, 10)}`, // Changed signature
+      'x-forwarded-for': '203.0.113.42', // Different IP
+      'user-agent': 'python-requests/2.31', // Different user agent
+    };
+
+    const fraudRes = await axios.post(webhookUrl, replayPayload, { timeout: 5000, validateStatus: () => true });
+    console.log(`[DataInjector] fraud_replay -> replayed ${fraudTxnId} after ${delayMs}ms (status ${fraudRes.status})`);
+    return;
   }
 }
 
