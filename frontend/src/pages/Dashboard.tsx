@@ -4,7 +4,6 @@ import axios from 'axios';
 import { BASE_URL } from '../lib/api';
 import { TrendingDown, Heart, Webhook, AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
 
-
 interface Metrics {
   driftRate: number;
   healSuccessRate: number;
@@ -64,21 +63,14 @@ export default function Dashboard() {
 
       const data = metricsRes.data;
       setMetrics(data);
-
-      // Real drift history from drift_snapshots
-      const driftData = driftHistoryRes.data.data || [];
-      setDriftHistory(driftData);
-
-      // Healer agent history
+      setDriftHistory(driftHistoryRes.data.data || []);
       setHealerHistory(healerHistoryRes.data.data || []);
 
-      // Real transaction states breakdown from transactions data
       const transactions = transactionsRes.data.data || [];
       const stateMap: Record<string, number> = {};
       transactions.forEach((tx: any) => {
-        // Map 'unknown' states to their actual state or skip them
         const state = tx.current_state;
-        if (!state || state === 'unknown') return; // Skip unknown states
+        if (!state || state === 'unknown') return;
         stateMap[state] = (stateMap[state] || 0) + 1;
       });
 
@@ -86,23 +78,22 @@ export default function Dashboard() {
         initiated: '#3b82f6',
         created: '#6366f1',
         authorized: '#8b5cf6',
-        captured: '#10b981',
+        captured: '#E8363D',
         settled: '#22c55e',
         failed: '#ef4444',
         refunded: '#6366f1',
       };
 
-      const realVolume = Object.entries(stateMap)
-        .map(([state, count]) => ({
-          state: state.charAt(0).toUpperCase() + state.slice(1),
-          count,
-          fill: stateColors[state] || '#94a3b8',
-        }))
-        .sort((a, b) => b.count - a.count);
+      setWebhookVolume(
+        Object.entries(stateMap)
+          .map(([state, count]) => ({
+            state: state.charAt(0).toUpperCase() + state.slice(1),
+            count,
+            fill: stateColors[state] || '#94a3b8',
+          }))
+          .sort((a, b) => b.count - a.count)
+      );
 
-      setWebhookVolume(realVolume.length > 0 ? realVolume : []);
-
-      // Heal activity from ALL anomalies (including recently resolved ones)
       const allAnomalies = allAnomaliesRes.data.data || [];
       setHealActivity(
         allAnomalies
@@ -124,7 +115,6 @@ export default function Dashboard() {
     }
   };
 
-  // Generate placeholder chart data
   useEffect(() => {
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 10000);
@@ -134,11 +124,11 @@ export default function Dashboard() {
   if (loading || !metrics) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="metric-card">
-            <div className="skeleton h-4 w-24 rounded mb-3"></div>
-            <div className="skeleton h-10 w-32 rounded mb-2"></div>
-            <div className="skeleton h-3 w-20 rounded"></div>
+            <div className="skeleton h-3 w-20 mb-2"></div>
+            <div className="skeleton h-7 w-28 mb-1"></div>
+            <div className="skeleton h-2.5 w-16"></div>
           </div>
         ))}
       </div>
@@ -147,115 +137,119 @@ export default function Dashboard() {
 
   const isDriftCritical = metrics.driftRate > 5;
   const hasManualQueue = metrics.openAnomalies > 0;
+  const driftStatus = isDriftCritical
+    ? { text: 'Critical', color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' }
+    : metrics.driftRate > 2
+    ? { text: 'Warning', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' }
+    : { text: 'Healthy', color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' };
 
-  const getDriftStatus = () => {
-    if (metrics.driftRate > 5) return { text: 'Critical - Review needed', color: '#EF4444', bg: '#FEF2F2', border: '#EF4444' };
-    if (metrics.driftRate > 2) return { text: 'Warning - Monitor closely', color: '#F59E0B', bg: '#FFFBEB', border: '#F59E0B' };
-    return { text: 'Healthy', color: '#22C55E', bg: '#F0FDF4', border: '#22C55E' };
-  };
-
-  const driftStatus = getDriftStatus();
+  const primaryTextColor = 'var(--color-text-primary)';
+  const secondaryTextColor = 'var(--color-text-secondary)';
+  const mutedTextColor = 'var(--color-text-muted)';
 
   return (
-    <div className="space-y-6">
-      {/* Metric Cards Grid */}
+    <div className="space-y-5">
+      {/* ── Metric Cards (4 primary) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Drift Rate */}
         <div className="metric-card" style={{ background: driftStatus.bg, borderColor: driftStatus.border }}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[#111827]">Drift Rate</span>
-            <TrendingDown style={{ color: driftStatus.color }} className="h-5 w-5" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-semibold" style={{ color: primaryTextColor, letterSpacing: '-0.01em' }}>Drift Rate</span>
+            <TrendingDown style={{ color: driftStatus.color }} className="h-4 w-4" />
           </div>
-          <p className="metric-value mb-2" style={{ color: driftStatus.color }}>
-            {metrics.driftRate.toFixed(2)}%
+          <p className="metric-value mb-1" style={{ color: driftStatus.color, fontSize: '26px' }}>
+            {metrics.driftRate.toFixed(1)}%
           </p>
-          <p className="text-xs font-medium" style={{ color: driftStatus.color }}>
+          <p className="text-[11px] font-semibold" style={{ color: driftStatus.color, letterSpacing: '0.02em' }}>
             {driftStatus.text}
           </p>
         </div>
 
         {/* Heal Success Rate */}
         <div className="metric-card">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[#111827]">Heal Success Rate</span>
-            <Heart className="h-5 w-5" style={{ color: '#22C55E' }} />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-semibold" style={{ color: primaryTextColor, letterSpacing: '-0.01em' }}>Heal Rate</span>
+            <Heart className="h-4 w-4" style={{ color: '#16A34A' }} />
           </div>
-          <p className="metric-value mb-2" style={{ color: '#22C55E' }}>
-            {metrics.healSuccessRate.toFixed(2)}%
+          <p className="metric-value mb-1" style={{ color: '#16A34A', fontSize: '26px' }}>
+            {metrics.healSuccessRate.toFixed(1)}%
           </p>
-          <p className="text-xs font-medium text-[#6B7280]">
+          <p className="text-[11px] font-semibold" style={{ color: metrics.healSuccessRate >= 90 ? '#16A34A' : mutedTextColor, letterSpacing: '0.02em' }}>
             {metrics.healSuccessRate >= 90 ? 'Excellent' : 'Monitor'}
           </p>
         </div>
 
         {/* Webhooks */}
         <div className="metric-card">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[#111827]">Webhooks (60 min)</span>
-            <Webhook className="h-5 w-5" style={{ color: '#0EA5E9' }} />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-semibold" style={{ color: primaryTextColor, letterSpacing: '-0.01em' }}>Webhooks</span>
+            <Webhook className="h-4 w-4" style={{ color: '#0EA5E9' }} />
           </div>
-          <p className="metric-value mb-2" style={{ color: '#111827' }}>
+          <p className="metric-value mb-1" style={{ color: primaryTextColor, fontSize: '26px' }}>
             {(metrics.totalWebhooks || 0).toLocaleString()}
           </p>
-          <p className="text-xs font-medium text-[#6B7280]">Events received</p>
-        </div>
-
-        {/* Open Anomalies */}
-        <div className="metric-card" style={{ background: hasManualQueue ? '#FFFBEB' : '#F0FDF4', borderColor: hasManualQueue ? '#F59E0B' : '#22C55E' }}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[#111827]">Open Anomalies</span>
-            <AlertTriangle className="h-5 w-5" style={{ color: hasManualQueue ? '#F59E0B' : '#22C55E' }} />
-          </div>
-          <p className="metric-value mb-2" style={{ color: hasManualQueue ? '#F59E0B' : '#22C55E' }}>
-            {metrics.openAnomalies}
-          </p>
-          <p className="text-xs font-medium" style={{ color: hasManualQueue ? '#F59E0B' : '#22C55E' }}>
-            {hasManualQueue ? 'Needs review' : 'All resolved'}
+          <p className="text-[11px] font-semibold" style={{ color: mutedTextColor, letterSpacing: '0.02em' }}>
+            Last 60 minutes
           </p>
         </div>
 
-        {/* AI Recovery Rate */}
-        <div className="metric-card">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[#111827]">AI Recovery Rate</span>
-            <ShieldCheck className="h-5 w-5" style={{ color: '#6366F1' }} />
+        {/* AI Recovery */}
+        <div className="metric-card" style={{ background: hasManualQueue ? '#FFF5F5' : '#F0FDF4', borderColor: hasManualQueue ? '#FECACA' : '#BBF7D0' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-semibold" style={{ color: primaryTextColor, letterSpacing: '-0.01em' }}>
+              {hasManualQueue ? `${metrics.openAnomalies} Open` : 'AI Recovery'}
+            </span>
+            {hasManualQueue
+              ? <AlertTriangle className="h-4 w-4" style={{ color: '#E8363D' }} />
+              : <ShieldCheck className="h-4 w-4" style={{ color: '#6366F1' }} />
+            }
           </div>
-          <p className="metric-value mb-2" style={{ color: '#6366F1' }}>
-            {metrics.healStats?.recoveryRate.toFixed(1) ?? 0}%
+          <p className="metric-value mb-1" style={{ color: hasManualQueue ? '#E8363D' : '#6366F1', fontSize: '26px' }}>
+            {hasManualQueue ? metrics.openAnomalies : `${(metrics.healStats?.recoveryRate ?? 0).toFixed(1)}%`}
           </p>
-          <p className="text-xs font-medium text-[#6B7280]">
-            {metrics.healStats?.totalAgentInterventions ?? 0} interventions
+          <p className="text-[11px] font-semibold" style={{ color: hasManualQueue ? '#E8363D' : mutedTextColor, letterSpacing: '0.02em' }}>
+            {hasManualQueue ? 'Needs review' : `${metrics.healStats?.totalAgentInterventions ?? 0} interventions`}
           </p>
         </div>
       </div>
 
-      {/* Charts Row */}
+      {/* ── Charts Row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Drift Rate Trend */}
-        <div className="chart-card">
-          <h3 className="text-base font-semibold text-[#111827] mb-4">Drift Rate Trend</h3>
+        <div className="chart-card" style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: secondaryTextColor }}>
+              Drift Rate Trend
+            </h3>
+            {driftHistory.length > 0 && (
+              <span style={{ fontSize: '11px', fontWeight: 600, color: mutedTextColor }}>
+                {driftHistory.length} snapshots
+              </span>
+            )}
+          </div>
           {driftHistory.length === 0 ? (
-            <div className="flex items-center justify-center h-[250px] text-[#6B7280] text-sm">
-              Collecting drift data... snapshots recorded every 10 seconds.
+            <div className="flex items-center justify-center h-[220px]" style={{ color: mutedTextColor, fontSize: '12px' }}>
+              Collecting data…
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={220}>
               <LineChart data={driftHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="timestamp" tick={{ fontSize: 10 }} stroke="#9CA3AF" angle={-30} textAnchor="end" height={60} />
-                <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" label={{ value: 'Drift %', position: 'insideLeft', offset: -5 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={mutedTextColor.replace(')', ', 0.15)').replace('var(', '').replace('--color-text-muted', '#9A9AAE')} opacity={0.3} />
+                <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A9AAE' }} angle={-30} textAnchor="end" height={50} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9A9AAE' }} tickLine={false} axisLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', boxShadow: '0 4px 25px rgba(0,0,0,0.12)' }}
-                  labelStyle={{ color: '#111827', fontWeight: 600 }}
-                  formatter={(value: number) => [`${value.toFixed(1)}%`, 'Drift Rate']}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E4E4ED', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                  labelStyle={{ color: '#1A1A2E', fontWeight: 600, fontSize: '11px' }}
+                  formatter={(value: number) => [`${value.toFixed(1)}%`, 'Drift']}
+                  itemStyle={{ fontSize: '11px', fontWeight: 600 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="driftRate"
-                  stroke={isDriftCritical ? '#EF4444' : '#22C55E'}
+                  stroke={isDriftCritical ? '#EF4444' : '#E8363D'}
                   strokeWidth={2}
                   dot={false}
-                  name="Drift %"
+                  name="Drift"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -263,23 +257,34 @@ export default function Dashboard() {
         </div>
 
         {/* Transaction States */}
-        <div className="chart-card">
-          <h3 className="text-base font-semibold text-[#111827] mb-4">Transaction States</h3>
+        <div className="chart-card" style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: secondaryTextColor }}>
+              Transaction States
+            </h3>
+            {webhookVolume.length > 0 && (
+              <span style={{ fontSize: '11px', fontWeight: 600, color: mutedTextColor }}>
+                {webhookVolume.reduce((s, e) => s + e.count, 0)} total
+              </span>
+            )}
+          </div>
           {webhookVolume.length === 0 ? (
-            <div className="flex items-center justify-center h-[250px] text-[#6B7280] text-sm">
-              No transaction data available
+            <div className="flex items-center justify-center h-[220px]" style={{ color: mutedTextColor, fontSize: '12px' }}>
+              No transaction data
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={webhookVolume}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="state" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4E4ED" opacity={0.5} />
+                <XAxis dataKey="state" tick={{ fontSize: 10, fill: '#9A9AAE' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9A9AAE' }} tickLine={false} axisLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', boxShadow: '0 4px 25px rgba(0,0,0,0.12)' }}
-                  labelStyle={{ color: '#111827', fontWeight: 600 }}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E4E4ED', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                  labelStyle={{ color: '#1A1A2E', fontWeight: 600, fontSize: '11px' }}
+                  formatter={(value: number) => [value, 'Transactions']}
+                  itemStyle={{ fontSize: '11px', fontWeight: 600 }}
                 />
-                <Bar dataKey="count" radius={[8, 8, 0, 0]} name="Transactions">
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} name="Transactions">
                   {webhookVolume.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
@@ -290,43 +295,41 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Audit Log + Recent Activity */}
+      {/* ── Audit Log + Recent Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* AI Agent Audit Log */}
-        <div className="log-panel flex flex-col">
-          <h3 className="text-base font-semibold text-[#111827] mb-4 flex items-center gap-2">
-            <Shield className="h-5 w-5" style={{ color: '#6366F1' }} />
+        <div className="log-panel" style={{ padding: '20px 24px' }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: secondaryTextColor, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Shield className="h-4 w-4" style={{ color: '#6366F1' }} />
             AI Agent Audit Log
           </h3>
           {healerHistory.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px] text-[#6B7280] text-sm">
-              No agent interventions yet.
+            <div className="flex items-center justify-center h-[260px]" style={{ color: mutedTextColor, fontSize: '12px' }}>
+              No interventions yet
             </div>
           ) : (
-            <div className="space-y-3 min-h-[300px] max-h-[400px] overflow-y-auto pr-2 flex-1">
+            <div className="space-y-3" style={{ minHeight: '260px', maxHeight: '360px', overflowY: 'auto' }}>
               {healerHistory.slice(0, 20).map((entry: any) => (
-                <div key={entry.id} className="text-xs border-b border-[#E5E7EB] pb-3 last:border-0">
+                <div key={entry.id} style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--color-border)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span
-                        className="inline-block px-2.5 py-1 rounded-full font-semibold text-[10px] tracking-wide"
+                        className="inline-block px-2 py-0.5 rounded font-semibold"
                         style={{
+                          fontSize: '9px',
+                          letterSpacing: '0.04em',
                           background: entry.outcome === 'healed' ? '#DCFCE7' : entry.outcome === 'suppressed' ? '#FEF3C7' : '#DBEAFE',
                           color: entry.outcome === 'healed' ? '#166534' : entry.outcome === 'suppressed' ? '#92400E' : '#1E40AF',
                         }}
                       >
-                        {entry.outcome === 'healed' ? 'HEALED_BY_AI' :
-                         entry.outcome === 'suppressed' ? 'SUPPRESSED' : 'PROCESSED'}
+                        {entry.outcome === 'healed' ? 'HEALED' : entry.outcome === 'suppressed' ? 'SUPPRESSED' : 'PROCESSED'}
                       </span>
-                      <span className="font-mono text-[#6B7280]">{entry.gateway_txn_id}</span>
+                      <span className="font-mono" style={{ fontSize: '11px', color: mutedTextColor }}>{entry.gateway_txn_id}</span>
                     </div>
-                    <span className="text-[#6B7280] tabular-nums">{entry.created_at}</span>
+                    <span style={{ fontSize: '10px', color: mutedTextColor, fontVariantNumeric: 'tabular-nums' }}>{entry.created_at}</span>
                   </div>
                   {entry.actions && entry.actions.length > 0 && (
-                    <p className="text-[#111827] mt-1.5 leading-relaxed">{entry.actions.join(' → ')}</p>
-                  )}
-                  {entry.bridge_events > 0 && (
-                    <p className="text-[#6B7280] mt-1">{entry.bridge_events} bridge event(s) synthesized</p>
+                    <p style={{ fontSize: '11px', lineHeight: 1.5, margin: '4px 0 0', color: primaryTextColor }}>{entry.actions.join(' → ')}</p>
                   )}
                 </div>
               ))}
@@ -335,24 +338,33 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Activity */}
-        <div className="log-panel flex flex-col">
-          <h3 className="text-base font-semibold text-[#111827] mb-4 flex items-center gap-2">
-            <TrendingDown className="h-5 w-5" style={{ color: '#0EA5E9' }} />
+        <div className="log-panel" style={{ padding: '20px 24px' }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: secondaryTextColor, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <TrendingDown className="h-4 w-4" style={{ color: '#0EA5E9' }} />
             Recent Activity
           </h3>
           {healActivity.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px] text-[#6B7280] text-sm">
-              No recent activity. Ledger is healthy.
+            <div className="flex items-center justify-center h-[260px]" style={{ color: mutedTextColor, fontSize: '12px' }}>
+              No recent activity
             </div>
           ) : (
-            <div className="divide-y divide-[#E5E7EB] min-h-[300px] max-h-[400px] overflow-y-auto flex-1">
-              {healActivity.map((activity) => (
-                <div key={activity.id} className="py-3 flex items-start justify-between">
-                  <div className="flex-1 pr-4">
-                    <p className="text-sm font-medium text-[#111827]">{activity.description}</p>
-                    <p className="text-xs text-[#6B7280] mt-1 font-mono">{activity.transaction_id}</p>
+            <div style={{ minHeight: '260px', maxHeight: '360px', overflowY: 'auto' }}>
+              {healActivity.map((activity, i) => (
+                <div key={activity.id} style={{
+                  padding: '10px 0',
+                  borderBottom: i < healActivity.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '12px', fontWeight: 500, margin: 0, color: primaryTextColor, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activity.description}
+                    </p>
+                    <p className="font-mono" style={{ fontSize: '10px', margin: '3px 0 0', color: mutedTextColor }}>{activity.transaction_id}</p>
                   </div>
-                  <span className="text-xs text-[#6B7280] whitespace-nowrap tabular-nums">
+                  <span style={{ fontSize: '10px', color: mutedTextColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {new Date(activity.created_at).toLocaleTimeString()}
                   </span>
                 </div>
@@ -364,4 +376,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

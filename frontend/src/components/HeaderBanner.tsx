@@ -11,6 +11,17 @@ interface HeaderBannerProps {
 }
 
 export default function HeaderBanner({ brand, stats }: HeaderBannerProps) {
+  if (!stats.length) {
+    return (
+      <header className="shell-header">
+        <div className="shell-header__brand">{brand}</div>
+        <div className="shell-header__stats" style={{ justifyContent: 'center' }}>
+          <span style={{ color: '#8A8A9A', fontSize: '12px' }}>Loading metrics…</span>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className="shell-header">
       <div className="shell-header__brand">{brand}</div>

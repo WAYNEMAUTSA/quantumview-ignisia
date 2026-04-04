@@ -1,6 +1,4 @@
--- QUICK FIX: Run this ENTIRE script in Supabase SQL Editor
--- This will fix the healer_audit_log table schema mismatch
--- After running, restart your backend server
+
 
 -- Drop the old table with wrong schema
 DROP TABLE IF EXISTS healer_audit_log CASCADE;
@@ -8,7 +6,7 @@ DROP TABLE IF EXISTS healer_audit_log CASCADE;
 -- Recreate with correct schema that the code expects
 CREATE TABLE healer_audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  gateway_txn_id TEXT NOT NULL,
+  gateway_txn_id TEXT NOT NUL
   gateway TEXT NOT NULL DEFAULT 'razorpay',
   original_event_type TEXT,
   healed_event_type TEXT NOT NULL,

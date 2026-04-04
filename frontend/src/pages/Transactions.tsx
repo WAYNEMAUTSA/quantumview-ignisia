@@ -21,20 +21,19 @@ interface Transaction {
 }
 
 const stateColors: Record<string, string> = {
-  initiated: 'bg-blue-100 text-blue-700',
-  created: 'bg-indigo-100 text-indigo-700',
-  authorized: 'bg-purple-100 text-purple-700',
-  captured: 'bg-emerald-100 text-emerald-700',
-  settled: 'bg-green-100 text-green-700',
-  failed: 'bg-red-100 text-red-700',
-  refunded: 'bg-indigo-100 text-indigo-700',
+  initiated: '#3B82F6',
+  created: '#6366F1',
+  authorized: '#8B5CF6',
+  captured: '#E8363D',
+  settled: '#16A34A',
+  failed: '#EF4444',
+  refunded: '#6366F1',
 };
 
-const gatewayBadgeColors: Record<string, string> = {
-  razorpay: 'bg-blue-50 text-blue-700 border-blue-200',
-  stripe: 'bg-purple-50 text-purple-700 border-purple-200',
-  cashfree: 'bg-green-50 text-green-700 border-green-200',
-  paypal: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+const gatewayColors: Record<string, { bg: string; text: string; border: string }> = {
+  razorpay: { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  stripe: { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
+  cashfree: { bg: '#F0FDF4', text: '#166534', border: '#BBF7D0' },
 };
 
 export default function Transactions() {
@@ -51,7 +50,6 @@ export default function Transactions() {
         const params: Record<string, any> = { limit, page };
         if (stateFilter) params.state = stateFilter;
         if (gatewayFilter) params.gateway = gatewayFilter;
-
         const res = await axios.get(`${BASE_URL}/transactions`, { params });
         setTransactions(res.data.data || []);
       } catch (err) {
@@ -60,9 +58,7 @@ export default function Transactions() {
         setLoading(false);
       }
     };
-
     fetchTransactions();
-    // Real-time polling every 5 seconds
     const interval = setInterval(fetchTransactions, 5000);
     return () => clearInterval(interval);
   }, [stateFilter, gatewayFilter, page]);
@@ -73,106 +69,96 @@ export default function Transactions() {
   }, [transactions]);
 
   if (loading && transactions.length === 0) {
-    return <div className="text-center py-12 text-gray-500">Loading transactions...</div>;
+    return <div className="text-center py-16" style={{ color: 'var(--color-text-muted)' }}>Loading…</div>;
   }
 
+  const textPrimary = 'var(--color-text-primary)';
+  const textSecondary = 'var(--color-text-secondary)';
+  const textMuted = 'var(--color-text-muted)';
+  const borderColor = 'var(--color-border)';
+
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-end bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+    <div className="space-y-5">
+      {/* ── Filters ── */}
+      <div className="rounded p-4 flex flex-wrap gap-4 items-end" style={{ background: '#fff', border: `1px solid ${borderColor}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: textMuted }}>State</label>
           <select
             value={stateFilter}
-            onChange={(e) => {
-              setStateFilter(e.target.value);
-              setPage(1);
-            }}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900"
+            onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}
+            className="text-sm"
+            style={{ borderRadius: '4px', border: `1px solid ${borderColor}`, padding: '6px 10px', color: textPrimary, outline: 'none', minWidth: '140px' }}
           >
             <option value="">All States</option>
-            {['initiated', 'created', 'authorized', 'captured', 'settled', 'failed', 'refunded'].map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
+            {['created', 'authorized', 'captured', 'settled', 'failed', 'refunded'].map((s) => (
+              <option key={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
             ))}
           </select>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Gateway</label>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: textMuted }}>Gateway</label>
           <select
             value={gatewayFilter}
-            onChange={(e) => {
-              setGatewayFilter(e.target.value);
-              setPage(1);
-            }}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900"
+            onChange={(e) => { setGatewayFilter(e.target.value); setPage(1); }}
+            className="text-sm"
+            style={{ borderRadius: '4px', border: `1px solid ${borderColor}`, padding: '6px 10px', color: textPrimary, outline: 'none', minWidth: '140px' }}
           >
             <option value="">All Gateways</option>
             {gateways.map((g) => (
-              <option key={g} value={g}>
-                {g?.charAt(0).toUpperCase() + g?.slice(1)}
-              </option>
+              <option key={g}>{g?.charAt(0).toUpperCase() + g?.slice(1)}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* ── Table ── */}
+      <div className="rounded overflow-hidden" style={{ background: '#fff', border: `1px solid ${borderColor}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full" style={{ fontSize: '12px' }}>
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Transaction ID</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Gateway</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Amount</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">State Timeline</th>
-                <th className="px-6 py-3 text-left font-semibold text-gray-700">Current Status</th>
+              <tr style={{ borderBottom: `1px solid ${borderColor}` }}>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider" style={{ color: textMuted, background: '#FAFAFD' }}>Transaction ID</th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider" style={{ color: textMuted, background: '#FAFAFD' }}>Gateway</th>
+                <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider" style={{ color: textMuted, background: '#FAFAFD' }}>Amount</th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider" style={{ color: textMuted, background: '#FAFAFD' }}>Timeline</th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider" style={{ color: textMuted, background: '#FAFAFD' }}>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {transactions.map((tx) => {
+            <tbody>
+              {transactions.map((tx, i) => {
                 const events = tx.webhook_events || [];
                 const status = events.length > 0 ? events[events.length - 1].event_type : tx.current_state;
-                // Skip 'unknown' states — use the actual current_state instead
                 const displayStatus = status === 'unknown' ? tx.current_state || 'captured' : status;
-                const isHealing = displayStatus === 'healing';
+                const gw = gatewayColors[tx.gateway?.toLowerCase()] || { bg: '#F5F5F5', text: '#6B7280', border: '#E5E7EB' };
+                const statusColor = stateColors[displayStatus] || '#6B7280';
 
                 return (
-                  <tr key={tx.id} className={isHealing ? 'bg-amber-50' : 'hover:bg-gray-50'}>
-                    <td className="px-6 py-4 font-mono text-xs text-gray-900">{tx.id.substring(0, 12)}...</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
-                          gatewayBadgeColors[tx.gateway?.toLowerCase() || ''] || 'bg-gray-50 text-gray-700 border-gray-200'
-                        }`}
-                      >
+                  <tr key={tx.id} style={{ borderBottom: i < transactions.length - 1 ? `1px solid ${borderColor}` : 'none' }}>
+                    <td className="px-5 py-3.5 font-mono" style={{ color: textPrimary, fontSize: '11px' }}>
+                      {tx.id.substring(0, 10)}…
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: gw.bg, color: gw.text, border: `1px solid ${gw.border}` }}>
                         {tx.gateway}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {tx.currency} {(tx.amount / 100).toFixed(2)}
+                    <td className="px-5 py-3.5 text-right font-semibold tabular-nums" style={{ color: textPrimary, fontSize: '12px', letterSpacing: '-0.02em' }}>
+                      {tx.currency} {(tx.amount / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <div className="flex flex-wrap gap-1 items-center">
-                        {events.map((evt, i) => {
-                          // Skip unknown event types from display
-                          if (evt.event_type === 'unknown') return null;
-                          return (
-                          <div key={i} className="flex items-center gap-1">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${stateColors[evt.event_type] || 'bg-gray-100 text-gray-700'}`}>
+                        {events.filter((e) => e.event_type !== 'unknown').map((evt, j) => (
+                          <div key={j} className="flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: (stateColors[evt.event_type] || '#F5F5F5') + '18', color: stateColors[evt.event_type] || '#6B7280' }}>
                               {evt.event_type}
                             </span>
-                            {i < events.length - 1 && <ChevronRight className="h-3 w-3 text-gray-400" />}
+                            {j < events.filter((e) => e.event_type !== 'unknown').length - 1 && <ChevronRight className="h-2.5 w-2.5" style={{ color: textMuted }} />}
                           </div>
-                          );
-                        })}
+                        ))}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${stateColors[displayStatus] || 'bg-gray-100 text-gray-700'}`}>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: statusColor + '18', color: statusColor }}>
                         {displayStatus}
                       </span>
                     </td>
@@ -184,25 +170,27 @@ export default function Transactions() {
         </div>
 
         {transactions.length === 0 && (
-          <div className="text-center py-12 text-gray-500">No transactions found.</div>
+          <div className="text-center py-12" style={{ color: textMuted }}>No transactions found.</div>
         )}
       </div>
 
-      {/* Pagination */}
+      {/* ── Pagination ── */}
       {transactions.length > 0 && (
         <div className="flex justify-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-2 rounded border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm rounded"
+            style={{ border: `1px solid ${borderColor}`, color: textSecondary }}
           >
             Previous
           </button>
-          <span className="px-3 py-2 text-sm text-gray-600">Page {page}</span>
+          <span className="px-3 py-1.5 text-sm" style={{ color: textMuted }}>Page {page}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={transactions.length < limit}
-            className="px-3 py-2 rounded border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm rounded"
+            style={{ border: `1px solid ${borderColor}`, color: textSecondary }}
           >
             Next
           </button>
@@ -211,4 +199,3 @@ export default function Transactions() {
     </div>
   );
 }
-

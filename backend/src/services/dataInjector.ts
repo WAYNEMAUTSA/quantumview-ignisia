@@ -19,7 +19,7 @@ interface InjectorConfig {
 
 const DEFAULT_CONFIG: InjectorConfig = {
   enabled: true,
-  intervalMs: 1000, // Inject a batch every 1 second
+  intervalMs: 1500, // Inject a batch every 1.5 seconds
   batchSize: 3, // 3 transactions per batch
   eventSequence: [
     'payment.created',
@@ -27,13 +27,13 @@ const DEFAULT_CONFIG: InjectorConfig = {
     'payment.captured',
   ],
   scenarioWeights: {
-    normal: 50,
+    normal: 65,
     duplicate: 5,
     out_of_order: 5,
-    dropped: 15,
+    dropped: 10,
     invalid_payload: 0,
-    gateway_outage: 15,
-    state_conflict: 10,
+    gateway_outage: 8,
+    state_conflict: 7,
   },
 };
 

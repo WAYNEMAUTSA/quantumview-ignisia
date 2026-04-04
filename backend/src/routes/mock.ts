@@ -5,7 +5,7 @@ const router = Router();
 
 // ─── Route A: GET /mock/razorpay/:txnId/fetch ───────────────────────────
 // Simulates a real payment gateway with realistic failure modes
-// ~25% chance of 503 outage, ~15% chance of conflict, ~60% success
+// ~18% chance of 503 outage, ~12% chance of conflict, ~70% success
 router.get('/razorpay/:txnId/fetch', async (req: Request, res: Response) => {
   const txnId = Array.isArray(req.params.txnId)
     ? req.params.txnId[0]
@@ -30,13 +30,13 @@ router.get('/razorpay/:txnId/fetch', async (req: Request, res: Response) => {
   // Random failure simulation for realistic anomaly generation
   const rand = Math.random();
 
-  // 25% chance of gateway outage (creates anomaly requiring AI review)
-  if (rand < 0.25) {
+  // 18% chance of gateway outage
+  if (rand < 0.18) {
     return res.status(503).json({ error: 'gateway temporarily unavailable' });
   }
 
-  // 15% chance of state conflict (creates conflict anomaly)
-  if (rand < 0.40) {
+  // 12% chance of state conflict
+  if (rand < 0.30) {
     return res.status(200).json({
       status: 'conflict',
       transaction: {
@@ -48,7 +48,7 @@ router.get('/razorpay/:txnId/fetch', async (req: Request, res: Response) => {
     });
   }
 
-  // 60% success — normal response with full event history
+  // 70% success
   return res.status(200).json({
     status: 'success',
     transaction: {

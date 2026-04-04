@@ -19,7 +19,7 @@ export default function DashboardShell({
   headerBanner,
 }: DashboardShellProps) {
   return (
-    <div className="min-h-screen bg-[var(--color-bg-secondary)] font-sans" style={{ fontFamily: 'var(--font-body)' }}>
+    <div className="min-h-screen" style={{ fontFamily: 'var(--font-body)', background: 'var(--color-bg-secondary)' }}>
       {/* ── Fixed Sidebar ── */}
       <aside className="shell-sidebar">
         <div className="shell-sidebar__logo">Q</div>
@@ -37,15 +37,14 @@ export default function DashboardShell({
             </button>
           ))}
         </nav>
-        {/* Bottom nav items */}
-        <div style={{ paddingBottom: '24px' }}>
+        <div className="shell-sidebar__footer">
           <div className="shell-sidebar__nav-item">
-            <User style={{ width: 20, height: 20 }} />
+            <User style={{ width: 18, height: 18 }} />
           </div>
         </div>
       </aside>
 
-      {/* ── Main Content Wrapper ── */}
+      {/* ── Content Wrapper ── */}
       <div>
         {/* ── Top Navigation ── */}
         <nav className="shell-topnav">
@@ -61,13 +60,13 @@ export default function DashboardShell({
             </button>
           ))}
           {liveTime && (
-            <div style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+            <div className="shell-topnav__clock">
               {liveTime.toLocaleTimeString()}
             </div>
           )}
         </nav>
 
-        {/* ── Header Banner (optional) ── */}
+        {/* ── Header Banner ── */}
         {headerBanner}
 
         {/* ── Main Content ── */}
