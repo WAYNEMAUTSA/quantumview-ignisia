@@ -1,6 +1,7 @@
 # Webhook Reconciliation Engine
 
-A real-time dashboard and automation engine for monitoring, reconciling, and healing webhook-driven payment transactions. It detects anomalies (dropped events, state conflicts, gateway outages), runs auto-heal workflows via a BullMQ queue, provides fraud detection for replay attacks, and offers a visual review queue for manual intervention.
+A real-time dashboard and automation engine for monitoring, reconciling, and healing webhook-driven payment transactions.
+The system operates as an Autonomous Healer. It must not only detect duplicates but analyze them as potential replay attacks. Every resolution must be backed by a reasoning trail. If the confidence score is below 0.85, the Agent must transition the state to 'Pending Manual Review' rather than executing an auto-heal nad block fraud suspecious webhooks.
 
 ![Architecture Flowchart](flowchart.jpeg)
 
