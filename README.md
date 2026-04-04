@@ -1,12 +1,14 @@
 # Webhook Reconciliation Engine
 
-A real-time dashboard and automation engine for monitoring, reconciling, and healing webhook-driven payment transactions. It detects anomalies (dropped events, state conflicts, gateway outages), runs auto-heal workflows via a BullMQ queue, and provides a visual review queue for manual intervention.
+A real-time dashboard and automation engine for monitoring, reconciling, and healing webhook-driven payment transactions. It detects anomalies (dropped events, state conflicts, gateway outages), runs auto-heal workflows via a BullMQ queue, provides fraud detection for replay attacks, and offers a visual review queue for manual intervention.
 
 ## ✨ Key Features
 
 - **Real-Time Drift Detection**: Monitors transaction lifecycle gaps (dropped, out-of-order, duplicate events)
 - **AI Auto-Healing**: Automatically fetches missing events from payment gateways and repairs transaction state
 - **Chaos Healer Agent**: Real-time webhook processor that detects and fixes gaps, duplicates, and stale events
+- **Fraud Detection Middleware**: Blocks replay attacks by calculating risk scores from time delta + header consistency
+- **Security Dashboard**: Live monitoring of fraud blocks, drops, and allowed retries with expandable detail views
 - **Anomaly Management**: Automatic detection + manual review queue for complex failures
 - **Audit Trail**: Every AI agent decision is logged with reasoning, confidence scores, and actions taken
 - **Live Dashboard**: Auto-refreshing metrics with drift charts, volume breakdowns, and agent activity
@@ -16,13 +18,20 @@ A real-time dashboard and automation engine for monitoring, reconciling, and hea
 ```
 Webhook Received
     ↓
+Fraud Detection Middleware ← NEW
+    ├── Checks for duplicate ID + header tampering
+    ├── Calculates risk score (0–100)
+    ├── BLOCKS (403) if high risk → logs to security_logs
+    ├── DROPS silently if moderate risk → logs to security_logs
+    └── ALLOWS if standard retry → passes through
+    ↓
 Chaos Healer (real-time)
     ├── Detects gaps/duplicates/out-of-order
     ├── Synthesizes bridge events if needed
     └── Logs to healer_audit_log
     ↓
 State Machine
-    ├── Updates transaction state
+    ├── Updates transaction state (UNREACHABLE if fraud blocked)
     └── Gap Detector finds missing states
     ↓
 BullMQ Heal Queue
@@ -44,11 +53,13 @@ Dashboard Metrics (every 10s)
 ├── backend/              # Express + Supabase + BullMQ
 │   ├── src/
 │   │   ├── db/           # Supabase client, SQL schema, migrations
-│   │   ├── queues/       # BullMQ heal queue (Upstash Redis)
-│   │   ├── routes/       # Express routes (webhook, mock, transactions, metrics, anomalies)
-│   │   ├── services/     # Business logic (stateMachine, autoHealer, gapDetector)
+│   │   ├── middleware/   # Express middleware (fraudDetection)
+│   │   ├── queues/       # BullMQ heal queue + InMemoryQueue fallback
+│   │   ├── routes/       # Express routes (webhook, mock, transactions, metrics, anomalies, security, injector)
+│   │   ├── services/     # Business logic (stateMachine, autoHealer, gapDetector, securityLog, dataInjector)
 │   │   ├── types/        # Shared TypeScript types
 │   │   ├── workers/      # BullMQ workers (healWorker, webhookWorker)
+│   │   ├── agents/       # AI agents (chaosHealer, chaosInjector)
 │   │   └── index.ts      # Express server entry point
 │   ├── package.json
 │   ├── tsconfig.json
@@ -59,19 +70,15 @@ Dashboard Metrics (every 10s)
 │   │   ├── components/   # UI components (MetricCards, DriftChart, TransactionList, AnomalyQueue, shadcn/ui)
 │   │   ├── hooks/        # React hooks (useRealtime, use-toast, use-mobile)
 │   │   ├── lib/          # API client, Supabase client, utilities
-│   │   ├── pages/        # Page components (Overview, Transactions, ReviewQueue, Dashboard, ManualReview)
-│   │   ├── test/         # Vitest test setup
+│   │   ├── pages/        # Page components (Dashboard, Transactions, ManualReview, SecurityDashboard)
 │   │   ├── App.tsx       # Main app with tab navigation
 │   │   ├── main.tsx      # Vite entry point
 │   │   └── index.css     # Tailwind + custom CSS tokens
-│   ├── public/
-│   ├── index.html
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── tailwind.config.ts
 │   └── tsconfig.json
 │
-├── src/                  # Shared source (both backend and frontend reference this)
 ├── package.json          # Root workspace scripts
 ├── .env.example
 └── README.md
@@ -108,18 +115,13 @@ npm run install:all
 
 ### 2. Setup Environment Variables
 
-Create `.env` in the `backend/` folder:
+Copy `.env.example` to `.env` in the root directory and edit:
 
-```bash
-cd backend
-cp ../.env.example .env
-```
-
-Edit `.env`:
 ```env
 PORT=3000
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+UPSTASH_REDIS_URL=your_upstash_redis_url
 SELF_URL=http://localhost:3000
 ```
 
@@ -131,11 +133,10 @@ Go to **Supabase SQL Editor** and run these files in order:
 # Run in Supabase SQL Editor (in order):
 backend/src/db/schema.sql                            # Base schema
 backend/src/db/migration_add_resolution_notes.sql    # Anomaly tracking
-backend/src/db/migration_fix_healer_audit_log.sql    # ⚠️ FIXES audit log schema
+backend/src/db/QUICK_FIX_healer_audit_log.sql        # ⚠️ FIXES audit log schema
 backend/src/db/migration_add_drift_snapshots.sql     # Drift history
+backend/src/db/migration_add_security_logs.sql       # Fraud detection logs
 ```
-
-Then edit `migration_add_ai_metadata.sql` and **remove** the `CREATE TABLE healer_audit_log` section (it's already created by the previous migration). Run only the `ALTER TABLE webhook_events` part.
 
 ### 4. Start the App
 
@@ -194,7 +195,7 @@ npm run dev             # Starts Vite dev server at http://localhost:8080
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | Health check |
-| `POST` | `/webhook/razorpay` | Incoming Razorpay webhook |
+| `POST` | `/webhook/razorpay` | Incoming Razorpay webhook (with fraud detection) |
 | `GET` | `/transactions` | List transactions (optional `?state=`, `?gateway=`, `?limit=`, `?page=`) |
 | `GET` | `/transactions/:id/events` | Full event log for one transaction |
 | `GET` | `/metrics` | Dashboard metrics (drift rate, heal success, AI recovery rate, open anomalies) |
@@ -204,8 +205,16 @@ npm run dev             # Starts Vite dev server at http://localhost:8080
 | `PATCH` | `/anomalies/:id/resolve` | Mark anomaly as resolved (body: `{ note: "...", targetState: "..." }`) |
 | `POST` | `/anomalies/:id/reject` | Reject anomaly with no auto-heal (body: `{ note: "..." }`) |
 | `POST` | `/anomalies/:id/refetch` | Re-fetch from gateway and replay events (auto-resolves on success) |
+| `POST` | `/anomalies/auto-handle` | AI auto-handles all unresolved anomalies |
 | `GET` | `/mock/razorpay/:txnId/fetch` | Mock gateway fetch for heal simulation |
 | `POST` | `/mock/simulate` | Trigger chaos demo scenario |
+
+### Security Dashboard
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/security/logs` | Paginated fraud/security log entries (`?limit=50&offset=0`) |
+| `GET` | `/security/stats` | Fraud statistics (blocked, dropped, allowed, avg risk, top flagged headers) |
 
 ### Injector Endpoints
 
@@ -228,6 +237,20 @@ The `/metrics` endpoint returns real-time data for:
 - **Open Anomalies**: Count of unresolved anomalies requiring attention
 - **Heal Success Rate**: Success rate of automated heal jobs
 - **Webhooks (60 min)**: Number of webhook events received in the last hour
+
+### Fraud Detection
+
+Every duplicate webhook attempt is scored on a 0–100 risk scale:
+
+| Score | Action | Description |
+|---|---|---|
+| 0–24 | **ALLOW** | Standard retry — same headers, short time delta |
+| 25–59 | **DROP** | Suspicious retry — silently dropped, logged to security dashboard |
+| 60–100 | **BLOCK** | Fraudulent — 403 response, logged to security dashboard |
+
+Risk factors:
+- **Time delta** (0–50 pts): Larger gap between original and retry = higher risk
+- **Header consistency** (0–50 pts): Changed signatures, IPs, or user agents = higher risk
 
 ### AI Agent Audit Log
 
@@ -289,20 +312,30 @@ Each scenario fires webhooks to `/webhook/razorpay` and returns the count of web
 
 ### Option 1: Random Injector (Recommended for Testing)
 
-The random injector automatically cycles through different scenarios to generate realistic test data:
+The random injector automatically cycles through different scenarios, including **fraud replay attacks** (~10% of batches):
 
 ```bash
 cd backend
 npm run injector:start   # Start continuous data injection
-npm run injector:stop    # Stop the injector
+npm run injector:stop    # Stop the random injector
 npm run injector:status  # Check current status
 ```
 
-Profiles (auto-cycled):
-- **realistic**: Mixed normal and anomalous traffic
-- **balanced**: Equal distribution of scenarios
-- **chaos**: High rate of dropped and out-of-order events
-- **normal-only**: Clean transaction flow
+Profiles:
+| Profile | Description |
+|---|---|
+| `realistic` | Mixed normal and anomalous traffic (default) |
+| `balanced` | Equal distribution of scenarios |
+| `chaos` | High rate of dropped and out-of-order events |
+| `normal-only` | Clean transaction flow only |
+| `fraud` | **70% fraud replay** — heavy replay attack simulation for security dashboard testing |
+
+Start fraud mode:
+```bash
+curl -X POST http://localhost:3000/injector/start \
+  -H "Content-Type: application/json" \
+  -d '{"profile": "fraud"}'
+```
 
 ### Option 2: One-Time Test Data Injection
 
@@ -347,9 +380,10 @@ After injecting data, refresh the dashboard to see:
 - **Drift Rate** changes based on dropped/out-of-order events
 - **AI Recovery Rate** increases as anomalies are resolved
 - **Open Anomalies** count decreases on resolution
+- **Security Dashboard** populates with fraud replay entries (every ~10th batch)
 - **AI Agent Audit Log** shows detailed reasoning for each action
 
-The dashboard auto-refreshes every 10 seconds.
+The dashboard auto-refreshes every 10 seconds. Security tab polls every 3 seconds.
 
 ## Deployment (Render)
 
@@ -382,11 +416,11 @@ Run these migrations in order after the base schema:
 | # | Migration | Purpose |
 |---|-----------|---------|
 | 1 | `migration_add_resolution_notes.sql` | Adds `resolution_notes` to anomalies |
-| 2 | `migration_fix_healer_audit_log.sql` | **CRITICAL**: Creates `healer_audit_log` with correct schema |
+| 2 | `QUICK_FIX_healer_audit_log.sql` | **CRITICAL**: Creates `healer_audit_log` with correct schema |
 | 3 | `migration_add_drift_snapshots.sql` | Creates drift snapshot table |
-| 4 | `migration_add_ai_metadata.sql` | Adds `ai_metadata` JSONB to `webhook_events` (⚠️ Skip the CREATE TABLE part) |
+| 4 | `migration_add_security_logs.sql` | Creates `security_logs` table for fraud detection |
 
-**⚠️ Important**: Do NOT run `migration_add_healer_audit_log.sql` - it has the wrong schema. Use `migration_fix_healer_audit_log.sql` instead.
+**⚠️ Important**: Do NOT run `migration_add_healer_audit_log.sql` — it has the wrong schema. Use `QUICK_FIX_healer_audit_log.sql` instead.
 
 All migrations are idempotent and can be run multiple times safely.
 
@@ -414,6 +448,8 @@ Anomalies stay open when:
 - ❌ Gateway returns 503 (outage) after 3 attempts
 - ❌ State conflict detected (ledger vs gateway mismatch)
 
+**Note**: Only one anomaly per transaction is created — duplicate anomaly creation is prevented.
+
 ### Heal Jobs Not Processing
 
 **Check Redis connection**:
@@ -430,8 +466,19 @@ echo $UPSTASH_REDIS_URL
 [AutoHealer] Auto-resolved X anomalies
 ```
 
+**In-memory fallback**: If Redis hits its request limit, the system automatically switches to an in-memory queue. Heal jobs will still process — check for `[InMemoryQueue]` or `[InMemoryWorker]` log lines.
+
 ### Dashboard Metrics Not Updating
 
 - Dashboard auto-refreshes every **10 seconds**
+- Security tab auto-refreshes every **3 seconds** (shows "last updated" timestamp + green pulse dot)
 - Check browser console for API errors
 - Verify backend is running: `curl http://localhost:3000/health`
+
+### Security Dashboard Shows No Data
+
+The security dashboard only logs **duplicate webhook attempts**. First-time events pass through without logging. To populate it:
+
+1. Start the fraud injection mode: `POST /injector/start` with `{"profile": "fraud"}`
+2. Or send the same webhook twice to the same transaction ID
+3. The second attempt triggers fraud detection → logs to `security_logs` → appears on the dashboard
