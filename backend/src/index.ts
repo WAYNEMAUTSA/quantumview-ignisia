@@ -44,9 +44,18 @@ webhookWorker.on('ready', () => {
   console.log('Webhook worker is ready');
 });
 
-healWorker.on('ready', () => {
-  console.log('Heal worker is ready');
+if (healWorker) {
+  healWorker.on('ready', () => {
+    console.log('Heal worker is ready (Redis-backed BullMQ)');
+    startServices();
+  });
+} else {
+  // In-memory fallback — start services immediately
+  console.log('Heal worker is ready (in-memory fallback mode)');
+  startServices();
+}
 
+function startServices(): void {
   // Start data injector (enabled by default in config)
   startDataInjector();
 
@@ -59,6 +68,6 @@ healWorker.on('ready', () => {
     }
   }, 10_000);
   console.log('Drift snapshot recorder started (every 10s)');
-});
+}
 
 export default app;
